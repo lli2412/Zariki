@@ -1,0 +1,232 @@
+from aiogram import F
+from aiogram.types import Message, CallbackQuery
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.types import
+InlineKeyboardMarkup, InlineKeyboardButton
+from .bot import bot
+from .utils import make_amount_kb, make_choice_kb
+from .game import ensure_user, create_match, join_match, get_balance, list_open_matches
+from .settings import START_BALANCE
+
+class CreateStates(StatesGroup):
+    choosing_amount = State()
+    choosing_pick = State()
+    confirming = State()
+
+# registering handlers will be done in app/main.py where Dispatcher is available
+# we implement handlers as functions to be registered
+
+async def cmd_start(m: Message, state: FSMContext):
+    await ensure_user(m.from_user.id, START_BALANCE)
+    bal = await get_balance(m.from_user.id)
+    await state.clear()
+    await m.reply(f"Привет! Баланс: {bal}\nСоздать матч: /create\nСписок открытых: /open")
+
+async def cmd_balance(m: Message):
+    bal = await get_balance(m.from_user.id)
+    await m.reply(f"Баланс: {bal}")
+
+async def cmd_create(m: Message, state: FSMContext):
+    await ensure_user(m.from_user.id, START_BALANCE)
+    kb = make_amount_kb()
+    kb.add(InlineKeyboardButton(text="Ввести вручную", callback_data="amount:custom"))
+    await state.set_state(CreateStates.choosing_amount)
+    await m.reply("Выберите ставку или введите вручную:", reply_markup=kb)
+
+async def cb_amount(c: CallbackQuery, state: FSMContext):
+    payload = c.data.split(":", 1)[1]
+    if payload == "custom":
+        await c.message.edit_text("Отправьте сумму в цифрах (целое положительное).")
+        await state.set_state(CreateStates.choosing_amount)
+        await c.answer()
+        return
+    amount = int(payload)
+    await state.update_data(amount=amount)
+    await state.set_state(CreateStates.choosing_pick)
+    await c.message.edit_text(f"Ставка {amount}. Выберите число 1-6:", reply_markup=make_choice_kb())
+    await c.answer()
+
+async def msg_custom_amount(m: Message, state: FSMContext):
+    text = m.text.strip()
+    if not text.isdigit() or int(text) <= 0:
+        await m.reply("Неверная сумма. Введите положительное целое число.")
+        return
+    amount = int(text)
+    await state.update_data(amount=amount)
+    await state.set_state(CreateStates.choosing_pick)
+    await m.reply(f"Ставка {amount}. Выберите число 1-6:", reply_markup=make_choice_kb())
+
+async def cb_pick_create(c: CallbackQuery, state: FSMContext):
+    pick = int(c.data.split(":",1)[1])
+    data = await state.get_data()
+    amount = data.get("amount")
+    if amount is None:
+        await c.message.answer("Сумма не установлена. Начните /create.")
+        await c.answer()
+        return
+    kb = InlineKeyboardMarkup().add(
+        InlineKeyboardButton(text="Подтвердить", callback_data="confirm:create"),
+        InlineKeyboardButton(text="Отмена", callback_data="confirm:cancel")
+    )
+    await state.update_data(pick=pick)
+    await state.set_state(CreateStates.confirming)
+    await c.message.edit_text(f"Создать матч: ставка {amount}, число {pick}?\nПодтвердите.", reply_markup=kb)
+    await c.answer()
+
+async def cb_cancel(c: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await c.message.edit_text("Отменено.")
+    await c.answer()
+
+async def cb_confirm_create(c: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    amount = data.get("amount")
+    pick = data.get("pick")
+    uid = c.from_user.id
+    try:
+        mid = await create_match(uid, amount, pick)
+    except Exception as e:
+        await c.message.answer(f"Ошибка создания матча: {e}")
+        await state.clear()
+        await c.answer()
+        return
+    await c.message.edit_text(f"Матч #{mid} создан: ставка {amount}, число {pick}. Ожидает соперника.")
+    await state.clear()
+    await c.answer()
+
+async def cmd_open(m: Message):
+    rows = await list_open_matches()
+    if not rows:
+        awaitInlineKeyboardMarkup, InlineKeyboardButton
+from .bot import bot
+from .utils import make_amount_kb, make_choice_kb
+from .game import ensure_user, create_match, join_match, get_balance, list_open_matches
+from .settings import START_BALANCE
+
+class CreateStates(StatesGroup):
+    choosing_amount = State()
+    choosing_pick = State()
+    confirming = State()
+
+# registering handlers will be done in app/main.py where Dispatcher is available
+# we implement handlers as functions to be registered
+
+async def cmd_start(m: Message, state: FSMContext):
+    await ensure_user(m.from_user.id, START_BALANCE)
+    bal = await get_balance(m.from_user.id)
+    await state.clear()
+    await m.reply(f"Привет! Баланс: {bal}\nСоздать матч: /create\nСписок открытых: /open")
+
+async def cmd_balance(m: Message):
+    bal = await get_balance(m.from_user.id)
+    await m.reply(f"Баланс: {bal}")
+
+async def cmd_create(m: Message, state: FSMContext):
+    await ensure_user(m.from_user.id, START_BALANCE)
+    kb = make_amount_kb()
+    kb.add(InlineKeyboardButton(text="Ввести вручную", callback_data="amount:custom"))
+    await state.set_state(CreateStates.choosing_amount)
+    await m.reply("Выберите ставку или введите вручную:", reply_markup=kb)
+
+async def cb_amount(c: CallbackQuery, state: FSMContext):
+    payload = c.data.split(":", 1)[1]
+    if payload == "custom":
+        await c.message.edit_text("Отправьте сумму в цифрах (целое положительное).")
+        await state.set_state(CreateStates.choosing_amount)
+        await c.answer()
+        return
+    amount = int(payload)
+    await state.update_data(amount=amount)
+    await state.set_state(CreateStates.choosing_pick)
+    await c.message.edit_text(f"Ставка {amount}. Выберите число 1-6:", reply_markup=make_choice_kb())
+    await c.answer()
+
+async def msg_custom_amount(m: Message, state: FSMContext):
+    text = m.text.strip()
+    if not text.isdigit() or int(text) <= 0:
+        await m.reply("Неверная сумма. Введите положительное целое число.")
+        return
+    amount = int(text)
+    await state.update_data(amount=amount)
+    await state.set_state(CreateStates.choosing_pick)
+    await m.reply(f"Ставка {amount}. Выберите число 1-6:", reply_markup=make_choice_kb())
+
+async def cb_pick_create(c: CallbackQuery, state: FSMContext):
+    pick = int(c.data.split(":",1)[1])
+    data = await state.get_data()
+    amount = data.get("amount")
+    if amount is None:
+        await c.message.answer("Сумма не установлена. Начните /create.")
+        await c.answer()
+        return
+    kb = InlineKeyboardMarkup().add(
+        InlineKeyboardButton(text="Подтвердить", callback_data="confirm:create"),
+        InlineKeyboardButton(text="Отмена", callback_data="confirm:cancel")
+    )
+    await state.update_data(pick=pick)
+    await state.set_state(CreateStates.confirming)
+    await c.message.edit_text(f"Создать матч: ставка {amount}, число {pick}?\nПодтвердите.", reply_markup=kb)
+    await c.answer()
+
+async def cb_cancel(c: CallbackQuery, state: FSMContext):
+    await state.clear()
+    await c.message.edit_text("Отменено.")
+    await c.answer()
+
+async def cb_confirm_create(c: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    amount = data.get("amount")
+    pick = data.get("pick")
+    uid = c.from_user.id
+    try:
+        mid = await create_match(uid, amount, pick)
+    except Exception as e:
+        await c.message.answer(f"Ошибка создания матча: {e}")
+        await state.clear()
+        await c.answer()
+        return
+    await c.message.edit_text(f"Матч #{mid} создан: ставка {amount}, число {pick}. Ожидает соперника.")
+    await state.clear()
+    await c.answer()
+
+async def cmd_open(m: Message):
+    rows = await list_open_matches()
+    if not rows:
+        await
+m.reply("Нет открытых матчей.")
+        return
+    text = "Открытые матчи:\n"
+    for r in rows:
+        text += f"#{r['id']}: {r['amount']} от {r['creator_id']} (выбрал {r['creator_choice']})\n"
+    text += "\nЧтобы присоединиться, нажмите /join <match_id>"
+    await m.reply(text)
+
+async def cmd_join(m: Message, dp_storage):
+    parts = m.text.strip().split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        await m.reply("Использование: /join <match_id>")
+        return
+    mid = int(parts[1])
+    await ensure_user(m.from_user.id, START_BALANCE)
+    await m.reply("Выберите число 1-6 чтобы присоединиться:", reply_markup=make_choice_kb())
+    # store match id in user storage
+    await dp_storage.set_data(user=m.from_user.id, data={"joining_match": mid})
+
+async def cb_pick_join(c: CallbackQuery, dp_storage):
+    data = await dp_storage.get_data(user=c.from_user.id)
+    joining = data.get("joining_match")
+    if not joining:
+        await c.answer("Нет активной команды /join. Используйте /join <id> сначала.")
+        return
+    pick = int(c.data.split(":",1)[1])
+    try:
+        res = await join_match(c.from_user.id, joining, pick)
+    except Exception as e:
+        await c.message.answer(f"Не удалось присоединиться: {e}")
+        await c.answer()
+        return
+    await c.message.answer(f"Результат броска: {res['result']}\nПобедитель: {res['winner']}\nКомиссия: {res['commission']}")
+    await dp_storage.set_data(user=c.from_user.id, data={})
+    await c.answer()
